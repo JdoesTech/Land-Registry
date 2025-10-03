@@ -111,7 +111,15 @@ end;
 //
 delimiter;
 
+create table land_history(
+    historyID binary(16) primary key,
+    landID binary(16) not null,
+    previousOwnerID int not null,
+    newerOwnerID int not null,
+    date_of_transfer datetime default current_timestamp,
+    change_type 
 
+);
 
 create index idx_land_owner_id on land(ownerID);
 create index idx_enquiry_buyer_id on enquiry(buyerID);
