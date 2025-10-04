@@ -65,7 +65,7 @@ foreign key (landID) references land(landID)
 constraint unique (buyerID, landID)
 );
 
-create table transfer(
+create table transfers(
     transferID int primary key auto_increment,
     landID binary(16) not null,
     oldOwnerID int not null,
@@ -87,7 +87,14 @@ create table transactions(
     landID binary(16) not null,
     amount decimal(10,2),
     transaction_date datetime default current_timestamp,
-    foreign key (transferID) references transfer(transferID)
+    payment_status enum('pending', 'completed', 'failed') default 'pending',
+    payment_method enum('bank_transfer', 'cash', 'credit_card', 'digital_wallet'),
+    foreign key (transferID) references transfers(transferID)
+        on delete cascade,
+    foreign key (buyerID) references buyers(buyerID)        
+        on delete cascade,  
+    foreign key (landID) references land(landID)
+        on delete cascade
 );
 
 delimiter //
@@ -99,7 +106,7 @@ begin
     declare trans_type('sale', 'inheritance', 'gift', 'reparation');
 
     select transfer_type into trans_type
-    from transfer
+    from transfers
     where transferID = new.transferID;
 
     if trans_type <> 'sale' then
@@ -112,15 +119,69 @@ end;
 delimiter;
 
 create table land_history(
-    historyID binary(16) primary key,
+    historyID int primary key auto_increment,
     landID binary(16) not null,
     previousOwnerID int not null,
     newerOwnerID int not null,
     date_of_transfer datetime default current_timestamp,
-    change_type 
-
+    change_type ('sale', 'inheritance', 'gift', 'reparation'),
+    foreign key (landID) references transfers(landID)
+        on delete cascade,
+    foreign key (previousOwnerID) references transfers(ownerID)
+        on delete cascade,
+    foreign key (newerOwnerID) references transfers(buyerID)
+        on delete cascade
 );
 
+create table zoning(
+    zoning_id binary(16) primary key,
+    landID binary(16),
+    zoning_type enum('residential', 'commercial', 'agricultural', 'industrial', 'recreational')
+    additional_restrictions text,   
+    effective_date datetime default current_timestamp,
+    foreign key (landID) references land(landID)
+        on delete cascade
+);
+
+create table audits(
+    logID binary(16) priamry  key,
+    action_type enum("insert", "update", "delete"),
+    describe_act text,
+    table_name enum('users', 'owners', 'land', 'buyers', 'enquiry', 'transfers', 'transactions', 'land_history', 'zoning'),
+    affected_record_binary_id binary(16),
+    affected_record_int_id int,
+    -- A little confused on how to handle this as some IDs are in binary form while others in int
+    -- The working philosophy is that in the crud operations, the backend shall provide a way to select only one of the two types from the respective tables
+    action_time datetime default current_timestamp,
+    performed_by binary(16),
+);
+
+create  table notifications(
+    notification_id int primary key auto_increment,
+    source binary(16),
+    recipient binary(16),
+    message text not null, 
+    notification_type enum('info', 'warning', 'alert', 'transaction'),
+    is_read boolean default false,
+    created_at datetime default current_timestamp,
+    foreign key (source) references users(userID)
+        on delete set null,
+    foreign key (recipient) references users(userID)
+        on delete cascade    
+);
+
+create table  surveys(
+    survey_id int primary key auto_increment,
+    landID binary(16) not null,
+    survey_date datetime default current_timestamp,
+    survey_type enum('boundary', 'topographic', 'environmental', 'geotechnical'),
+    surveyor_name varchar(100),
+    notes text,
+    foreign key (landID) references land(landID)
+        on delete cascade
+);
+
+create index idx_user_id on users(userID);
 create index idx_land_owner_id on land(ownerID);
-create index idx_enquiry_buyer_id on enquiry(buyerID);
+create index idx_enquiry_buyer_status on enquiry(buyerID, enquiry_status);
 create index idx_enquiry_land_id on enquiry(landID);
